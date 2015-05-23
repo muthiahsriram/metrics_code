@@ -1,0 +1,4163 @@
+---
+output: html_document
+---
+__Metrics Report - April 2015
+
+
+
+========================================================
+
+```{r,echo=FALSE}
+date <-date()
+print (date)
+
+```
+
+
+The information required for Metrics:-
+
+
+__*nv - number of verification points__
+
+
+__*ns - number of step__
+
+
+__*In progress tasks are taken into account__
+
+
+__*Agile metrics and rework efforts are calculated__
+
+
+__* If there is an error in the report or an blank space after the heading ->"Error: object 'metrics_tcr' not found" -Then there is no test case review Data__
+
+
+
+
+
+__User_Summary__
+
+```{r User_summary ,echo=FALSE,warning=FALSE,message=FALSE,results='markup'}
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+  setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+    issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+   if(length(peoplewithoutissues ==0)) {
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues) 
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+ print(User_summary)
+  }
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+  
+
+```
+__Metrics Final Summary__
+
+```{r Metrics_final_summary__,echo=FALSE,warning=FALSE,message=FALSE,results='markup'}
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+    issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+
+
+print(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")}
+}
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+
+```
+
+__Agile_Metrics__
+
+
+
+*Fixed - Fixed issues ; Fixed.y - time spent on the fixed issues
+
+
+
+*Invalid - Invalid issues ;Invalid.y - time spent on the issues
+
+
+
+*Unresolved - Unresoved issues ; Unresolved - time spent on unresolved issues
+
+
+
+*Total valid issues = Fixed issues + Unresolved Issues
+
+
+*Time spent doesnt have any significance now.If you give the time spent on the issues - then it will make sense.Otherwise it won't.
+
+```{r Agilemetrics,echo=FALSE,warning=FALSE,message=FALSE,results='markup'}
+
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+print(agilemetrics)
+  }
+
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+
+```
+
+
+
+
+
+
+__Automation_task__
+ 
+```{r automation_task, echo=FALSE,message=FALSE,warning=FALSE,results='markup'}
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+if(exists('metrics_automation')){
+if(nrow(metrics_automation)>0){
+ print(metrics_automation)}}
+
+if(!exists('metrics_automation')) print("No Automation task")
+
+  }
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+```
+__Test_case_review__
+ 
+
+```{r Test_case_review ,echo=FALSE,warning=FALSE,results='markup'}
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+
+if(exists('metrics_tcr')){
+if(nrow(metrics_tcr)>0){
+ print(metrics_tcr)}}
+
+if(!exists('metrics_automation')) print("No Testcase Review task")
+
+
+  }
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+```
+__Test_case_development__
+```{r test_case_development,echo=FALSE,message=FALSE,warning=FALSE,results='markup'}
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+    
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)}
+  
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+#print(metrics_tc_development)
+if(exists('metrics_tc_development')){
+if(nrow(metrics_tc_development)>0){
+ print(metrics_tc_development)}}
+
+if(!exists('metrics_automation')) print("No Testcase documentation task")
+
+  }
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+
+```
+
+__Test Case Execution__
+
+
+```{r test_case_execution,echo=FALSE,message=FALSE,warning=FALSE,results='markup'}
+
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ##print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  ####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ##print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ##print("Other_Task_summary")
+  ##print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ##print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ##print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ##print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ##print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ##print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ##print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ##print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ##print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ##print(peoplewithoutsteps)
+  ##print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ##print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ###print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ##print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ##print("metrics_functional")
+  ##print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ##print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ##print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ##print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ##print( "metrics_post_automation")
+   ##print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ##print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ##print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ##print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ##print("metrics_post_tcd_auto")
+    ##print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ##print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ##print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ##print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ##print("tcr_summary")
+    ##print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ##print("metrics_tce")
+  ##print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ##print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ##print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ###print(tce_summary)
+  ###print(tcr_summary)
+  ###print(automation_summary)
+  ###print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+###print("before")
+###print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+###print("after")
+###print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+###print("total")
+###print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ##print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+print(metrics_tce)
+  }
+
+  metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+
+```
+
+
+
+
+
+
+
+__Other_Task__
+
+
+```{r Other Task,echo=FALSE,warning=FALSE,message=FALSE,results='markup'}
+
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    ###print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  #####print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  ###print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  ###print("Other_Task_summary")
+  ###print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  ###print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  ###print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  ###print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  ###print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  ###print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  ###print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  ###print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  ###print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  ###print(peoplewithoutsteps)
+  ###print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  ###print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ####print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ ###print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  ###print("metrics_functional")
+  ###print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    ###print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   ###print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   ###print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   ###print( "metrics_post_automation")
+   ###print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    ###print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    ###print("metrics_post_tcd_auto")
+    ###print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    ###print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    ###print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    ###print("tcr_summary")
+    ###print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  ###print("metrics_tce")
+  ###print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  ###print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  ###print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ####print(tce_summary)
+  ####print(tcr_summary)
+  ####print(automation_summary)
+  ####print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+####print("before")
+####print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+####print("after")
+####print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+####print("total")
+####print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  ###print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+print(Other_Task)
+  }
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+
+```
+
+
+
+
+
+__Trying graphs__
+```{r graph,echo=FALSE,warning=FALSE,message=FALSE,results='markup'}
+
+
+#print("function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq=Other task,atq=automation,metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)")
+metrics<-function(metrics_main_icc,inprogress_icc=NULL,user_list_icc,issues_summary_icc,otq="Other_task|Other task",atq="automation",metrics_main_epipe,inprogress_epipe=NULL,user_list_epipe,issues_summary_epipe)
+{
+  convert.factors.to.strings.in.dataframe <- function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    factor.vars <- class.data[class.data == "factor"]
+    for (colname in names(factor.vars))
+    {
+      dataframe[,colname] <- as.character(dataframe[,colname])
+    }
+    return (dataframe)
+  }
+  
+  convert.characters.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "character"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  convert.factors.to.numeric<-function(dataframe)
+  {
+    class.data  <- sapply(dataframe, class)
+    character.vars <- class.data[class.data == "factor"]
+    for (colname in names(character.vars))
+    {
+      dataframe[,colname] <- as.numeric(dataframe[,colname]) 
+    }
+    return (dataframe)
+  }
+  
+  Create_empty_columns<-function()
+  {
+    High<-c("0","0","0")
+    Medium<-c("0","0","0")
+    X.Low<-c("0","0","0")
+    
+    df<-data.frame(High,Medium,X.Low)
+    #print(df)
+  }
+  
+  trygrep <-function(Data)
+  {
+    columns<-colnames(Data)
+    vector1<-c("0")
+    
+    if (!length((grep("High",columns,ignore.case=T))))
+    { Data<-data.frame(Data,High=vector1) 
+    }
+    
+    
+    if(!length((grep("Medium",columns,ignore.case=T))))
+    { Data<-data.frame(Data,Medium=vector1) 
+    }
+    
+    
+    
+    if(!length((grep("Low",columns,ignore.case=T))))
+    { Data<-data.frame(Data,X.Low=vector1) 
+    }
+    
+    Data<-Data[,c("High","Medium","X.Low")]
+    
+  }
+  
+  library("splitstackshape")
+  library("data.table")
+  ##seting up wd where the csv file has to be saved
+   setwd("C:\\Users\\IBM_ADMIN\\Documents\\metrics_run")
+  
+  ##reading the input file from RTC
+  metrics_raw_icc <- read.csv(metrics_main_icc,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  
+  if(!is.null(inprogress_icc))
+  {
+  metrics_raw_1_icc <-read.csv(inprogress_icc,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  View(metrics_raw_1_icc)
+  metrics_raw_icc<-rbind(metrics_raw_icc,metrics_raw_1_icc)##combining in-progress tasks
+  View(metrics_raw_icc)
+  }
+  
+  metrics_raw_epipe <- read.csv(metrics_main_epipe,header = TRUE,sep = "\t",fileEncoding="UTF-16LE")
+  if(!is.null(inprogress_epipe))
+  {
+    metrics_raw_1_epipe <-read.csv(inprogress_epipe,header = T,sep = "\t",fileEncoding = "UTF-16LE") ##to read in progress tasks
+  
+  metrics_raw_epipe<-rbind(metrics_raw_epipe,metrics_raw_1_epipe)
+  
+  }
+  metrics_raw<-rbind(metrics_raw_icc,metrics_raw_epipe)
+  metrics_table<-as.data.frame(metrics_raw,stringsAsFactors=FALSE)
+
+  metrics_table<-metrics_table[,c("Id","Summary","Owned.By","Status","Docs.Affected","Time.Spent")]
+  
+  ##separating the numeric and "hours" in the Time.Spent column
+  metrics_table$Time.Spent<-gsub("hours", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-gsub("hour", "", metrics_table$Time.Spent, ignore.case = FALSE, perl = FALSE,
+                                fixed = FALSE, useBytes = FALSE)
+  metrics_table$Time.Spent<-as.numeric(metrics_table$Time.Spent)
+  
+  ##splitting the nv and ns delimited by comma
+  needed<-concat.split.multiple(metrics_table, "Docs.Affected", ",")
+  if (!length((grep("Docs.Affected_3",colnames(needed),ignore.case=T))))
+  { 
+    Docs.Affected_3<-0
+    needed<-cbind(needed,Docs.Affected_3)
+  }
+  ##View(needed)
+  metrics_needed<-setnames(needed, old = c('Docs.Affected_1','Docs.Affected_2','Docs.Affected_3'), new = c('nv','ns','time_spent_in_previous_cycle'))
+  metrics_needed[,c("time_spent_in_previous_cycle")][is.na(metrics_needed[,c("time_spent_in_previous_cycle")])]<-0
+  metrics_needed<-convert.factors.to.strings.in.dataframe(metrics_needed)
+  metrics_needed[,c("nv")][is.na(metrics_needed[,c("nv")])]<-1
+  metrics_needed[,c("nv","ns")][is.na(metrics_needed[,c("nv","ns")])]<-1
+  View(metrics_needed)
+  metrics_needed[,c("Time.Spent")][is.na(metrics_needed[,c("Time.Spent")])]<-1
+  metrics_needed$Time.Spent<-metrics_needed$Time.Spent - metrics_needed$time_spent_in_previous_cycle
+  ##View(metrics_needed$time_spent_in_previous_cycle)
+  ###print("metrics_needed")
+  ##View(metrics_needed)
+  
+  ##Other_Task_Analysis->Other_task_summary->Scrum,productive,non-productive
+  Other_Task<-metrics_needed[grep(otq, metrics_table$Summary,ignore.case=T),]
+  View(Other_Task)
+  
+  #print(Other_Task)
+  Other_Task$nv<-sub("productive", "Productive", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task$nv<-sub("non", "Non", Other_Task$nv, ignore.case = T, perl = FALSE,
+      fixed = FALSE, useBytes = FALSE)
+  Other_Task_list<-split(Other_Task,Other_Task$nv)
+  Other_Task_summary<-lapply(Other_Task_list,function(z) colSums(z[,c("Time.Spent","Time.Spent")]))
+  Other_Task_summary<-as.data.frame(Other_Task_summary)
+  Other_Task_summary<-Other_Task_summary["Time.Spent",]
+  Other_Task_summary<-t(Other_Task_summary)
+  
+  ##creating a table in the same dimension as metrics_final_summary
+  Other_Task_summary<-cbind("High"=0,"Medium"=0,"Low"=0,Other_Task_summary)
+  colnames(Other_Task_summary)<-c("High","Medium","X.Low","total")
+  convert.factors.to.strings.in.dataframe(Other_Task_summary)
+  #print("Other_Task_summary")
+  #print(Other_Task_summary)
+  
+  ##User_summary
+  metrics_needed$nv<-as.numeric(as.character(metrics_needed$nv))
+  metrics_needed$ns<-as.numeric(as.character(metrics_needed$ns))
+  User_list<-split(metrics_needed,metrics_needed$Owned.By)
+  #print(User_list)
+  User_summary<-lapply(User_list,function(z) colSums(z[,c("Time.Spent","nv","ns")]))
+  User_summary<-as.data.frame(User_summary,header=T)
+  User_summary<-User_summary[c("Time.Spent"),]
+  View(User_summary)
+  
+  ####Agile metrics
+  
+  ##metrics_table after substracting Other_task
+  metrics_functional<-metrics_needed[-grep(otq, metrics_table$Summary,ignore.case=T),]
+  
+  
+ 
+  ##Issue_summary
+  userlist_icc<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist_epipe<-read.csv(user_list_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  userlist<-rbind(userlist_icc,userlist_epipe)
+  userlist<-unique(userlist)
+  #print(userlist)
+  userlist<-as.character(userlist$Owned.By)
+   issues<-read.csv(issues_summary_icc,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  
+  issues_epipe<-read.csv(issues_summary_epipe,header = T,sep = "\t",fileEncoding="UTF-16LE")
+  if(nrow(issues_epipe)!=0){
+  issues<-rbind(issues,issues_epipe)}
+  issues$Time.Spent <-sub("hours", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent <-sub("hour", "", issues$Time.Spent, ignore.case = T, perl = FALSE,
+                          fixed = FALSE, useBytes = FALSE)
+  issues$Time.Spent<-as.numeric(issues$Time.Spent)
+  issues$Resolution<- sub("(^ +)|( +$)","Open",issues$Resolution,ignore.case= T)
+  issues_list<-split(issues,issues$Resolution)
+  issues_further_list<-lapply(issues_list,function(x) split(x , x[,c("Created.By")]))
+  #print(issues_further_list)
+  issues_summary<-sapply(issues_further_list,function(y) sapply(y,function(z) nrow(as.data.frame(z))))
+  
+  issues_summary<-cbind(Testers=rownames(issues_summary),issues_summary)
+  rownames(issues_summary)<-NULL
+  issues_summary<-as.data.frame(issues_summary)
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary[,colnames(issues_summary)!="Testers"])
+  issues_summary[,colnames(issues_summary)!="Testers"]<-convert.characters.to.numeric(issues_summary[,colnames(issues_summary)!="Testers"])
+  #print(sapply(issues_summary[,names(issues_summary)!="Testers"],class))
+  issues_summary$total_valid_issues<-rowSums(issues_summary[,colnames(issues_summary)!="Testers"][,-grep("Invalid", colnames(issues_summary[,colnames(issues_summary)!="Testers"]),ignore.case=T)])
+  View(issues_summary)
+  issues_summary.rw<-sapply(issues_further_list,function(y) sapply(y,function(z) sum(z[,c("Time.Spent")],na.rm =T)))
+  
+  issues_summary.rw<-cbind(Testers=rownames(issues_summary.rw),issues_summary.rw)
+  rownames(issues_summary.rw)<-NULL
+  issues_summary.rw<-as.data.frame(issues_summary.rw)
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.factors.to.strings.in.dataframe(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw[,colnames(issues_summary.rw)!="Testers"]<-convert.characters.to.numeric(issues_summary.rw[,colnames(issues_summary.rw)!="Testers"])
+  issues_summary.rw$total.rw<-rowSums(issues_summary.rw[colnames(issues_summary.rw)!="Testers"])
+  View(issues_summary.rw)
+  agilemetrics_final<-merge(x = issues_summary, y = issues_summary.rw, by = "Testers", all = F)
+  #colnames(agilemetrics)<-c("Testers","Fixed_issues","invalid_issues","work_as_defined_issues","Fixed_issues_rw","invalid_issues_rw","work_as_defined_rw")
+  
+  columnns_agile_metrics<-ncol(agilemetrics_final)
+  columnns_agile_metrics<-columnns_agile_metrics - 1
+  w<-0
+  
+  ##making data for the whole group
+  peoplewithissues<-agilemetrics_final[,c("Testers")]
+  peoplewithoutissues<-userlist[which(!(userlist%in%peoplewithissues))]
+  if(length(peoplewithoutissues ==0)) {
+  for(i in 1:columnns_agile_metrics){peoplewithoutissues<-cbind(peoplewithoutissues,w)}
+  #print(colnames(peoplewithoutissues))
+  colnames(peoplewithoutissues)<-colnames(agilemetrics_final)
+  #print(colnames(peoplewithoutissues))
+  View(peoplewithoutissues)
+  agilemetrics_final<-rbind(agilemetrics_final,peoplewithoutissues)
+  }
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.factors.to.strings.in.dataframe(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  agilemetrics_final[,colnames(agilemetrics_final)!="Testers"]<-convert.characters.to.numeric(agilemetrics_final[,colnames(agilemetrics_final)!="Testers"])
+  #print(agilemetrics_final)
+  total<-colSums(agilemetrics_final[,names(agilemetrics_final)!="Testers"])
+  total<-t(total)
+  total<-cbind("total",total)
+  total<-cbind(rownames(total),total)
+  colnames(total)<-colnames(agilemetrics_final)
+  agilemetrics_final<-rbind(agilemetrics_final,total)
+  agilemetrics_final$Testers<-gsub("\\.", " ", agilemetrics_final$Testers, ignore.case = FALSE, perl = FALSE,
+                                   fixed = FALSE, useBytes = FALSE)
+  View(agilemetrics_final)
+  ##user_ns
+  d<-0
+  #print(colnames(metrics_functional))
+  User_list_2<-split(metrics_functional,metrics_functional$Owned.By)
+  User_ns<-lapply(User_list_2,function(p)colSums(p[,c("nv","ns")]))
+  User_ns<-as.data.frame(User_ns,header=T)
+  User_ns<-User_ns[c("ns"),]
+  User_ns<-t(User_ns)
+  Userswithsteps<-names(User_list_2)
+  peoplewithoutsteps<-userlist[which(!(userlist%in%Userswithsteps))]
+  #print(peoplewithoutsteps)
+  #print(ncol(peoplewithoutsteps))
+  peoplewithoutsteps<-cbind(peoplewithoutsteps,d)
+  peoplewithoutsteps<-as.data.frame(peoplewithoutsteps)
+  View(peoplewithoutsteps)
+  User_ns<-cbind(Testers = rownames(User_ns),User_ns)
+  rownames(User_ns)<-NULL
+ 
+  #if(!is.null(ncol(peoplewithoutsteps)))
+  #{
+  #colnames(peoplewithoutsteps)<-colnames(User_ns)
+  
+  #User_ns<-rbind(User_ns,peoplewithoutsteps)
+  #}
+  View(User_ns)
+  
+  
+  tobesummed<-User_ns[,c("ns")]
+  tobesummed<-as.numeric(tobesummed)
+
+  
+  User_ns[,c("ns")]<-as.numeric(User_ns[,c("ns")])
+  View(sapply(User_ns,class))
+   ##senti[,1:4] <- sapply(senti[,1:4], as.numeric)
+  #print(class(User_ns[,c("ns")]))
+  total<-sum(tobesummed)
+  total<-as.data.frame(total)
+  total<-t(total)
+  total<-cbind(total=rownames(total),total)
+  rownames(total)<-NULL
+  colnames(total)<-colnames(User_ns)
+  User_ns<-rbind(User_ns,total)
+  User_ns<-as.data.frame(User_ns)
+  User_ns$Testers<-gsub("\\.", " ", User_ns$Testers, ignore.case = FALSE, perl = FALSE,
+                              fixed = FALSE, useBytes = FALSE)
+  ##print(total)
+  View(User_ns)
+  agilemetrics<-merge(x = agilemetrics_final, y = User_ns, by = "Testers", all = T)
+  agilemetrics$ns<-as.numeric(agilemetrics$ns)
+  agilemetrics[,colnames(agilemetrics)!= "Testers"]<-convert.characters.to.numeric(agilemetrics[,colnames(agilemetrics)!= "Testers"])
+ #print(sapply(agilemetrics,class))
+  agilemetrics$failedsteps<-agilemetrics$Unresolved.x   ##unresolved = still fail ,others =pass
+  agilemetrics$passedsteps<-agilemetrics$ns - agilemetrics$Unresolved.x ##passedsteps steps-unresolved
+  View(agilemetrics)
+  
+  #agilemetrics$failed_steps<-agilemetrics$ns - agilemetrics$number_of_issues
+ # `%-na%` <- function(x,y) {ifelse( is.na(x), 0, ifelse( is.na(y), x, x-y) )}
+  #agilemetrics[ , failed_steps :=  ns - number_of_issues]
+ 
+  
+  ##To categorize tasks into high,medium and low based on nv and ns
+  metrics_functional$category<-ifelse(metrics_functional$nv>=10 & metrics_functional$ns<=8, "Medium", 
+                                      ifelse(metrics_functional$nv<=10 & metrics_functional$ns>16 & metrics_functional$ns<=25, "High",
+                                             ifelse(metrics_functional$nv<=10 &metrics_functional$ns>8 & metrics_functional$ns<=16, "Medium",
+                                                    ifelse(metrics_functional$nv<=10 & metrics_functional$ns<=8 ," Low",
+                                                           ifelse(metrics_functional$nv <= 5 & metrics_functional$ns>16 & metrics_functional$ns<=25,"Medium",
+                                                                  ifelse(metrics_functional$nv<=5 & metrics_functional$ns<=16, "Low", "High" ))))))
+ 
+
+  #print("metrics_functional")
+  #print(metrics_functional[,c("Summary","Time.Spent")])
+  #automation_summary_if_there is no automation data
+  if (!length((grep(atq,metrics_functional$Summary,ignore.case=T))))
+    
+  {
+    automation_summary<-Create_empty_columns()
+    row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   automation_summary<- convert.factors.to.strings.in.dataframe(automation_summary)
+    #print(automation_summary)
+    metrics_post_automation<-metrics_functional
+   
+   
+  }
+  ##automation_summary_if_there is automation data present
+  else
+  {metrics_automation<-metrics_functional[grep(atq,metrics_functional$Summary,ignore.case=T),]
+   View(metrics_automation)
+   automation_list<-split(metrics_automation,metrics_automation$category)
+   automation_summary<-lapply(automation_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+   automation_summary<-as.data.frame(automation_summary)
+   automation_summary<-trygrep(automation_summary)
+   #print("after else")
+   automation_summary<-convert.factors.to.strings.in.dataframe(automation_summary)
+   #print(automation_summary)
+   row.names(automation_summary) <- c("automation.nv","automation.ns","automation.Time.Spent")
+   metrics_post_automation<-metrics_functional[-grep(atq,metrics_functional$Summary,ignore.case=T),]
+   #print( "metrics_post_automation")
+   #print( metrics_post_automation)
+  }
+  
+  #test_case_development_summary if there is no test_case_development data
+  if (!length((grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T))))
+    
+  {
+    tcd_summary<-Create_empty_columns()
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    #print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation
+  }
+  ##testcase_development_summary if there is  test_case_development data
+  else{
+    metrics_tc_development<-metrics_post_automation[grep("test_case_development |test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    #print(metrics_tc_development)
+    View(metrics_tc_development)
+    tcd_list<-split(metrics_tc_development,metrics_tc_development$category)
+    tcd_summary<-lapply(tcd_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    tcd_summary<-as.data.frame(tcd_summary)
+    row.names(tcd_summary) <- c("testcasedevelopmetn.nv","testcasedevelopment.ns","testcasedevelopment.Time.Spent")
+    tcd_summary<-trygrep(tcd_summary)
+    tcd_summary<-convert.factors.to.strings.in.dataframe(tcd_summary)
+    #print(tcd_summary)
+    metrics_post_tcd_auto<-metrics_post_automation[-grep("test_case_development|test_case_documentation",metrics_post_automation$Summary,ignore.case = T),]
+    #print("metrics_post_tcd_auto")
+    #print(metrics_post_tcd_auto)
+  }
+  
+  #test_case_review_summary_if there is no test_case_review_data 
+  
+  if (!length((grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T))))
+    
+  {
+    tcr_summary<-Create_empty_columns()
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    #print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto
+    #metrics_tcr<-NULL
+    #View(metrics_tcr)
+  }
+  #test_case_review_summary_if there is  test_case_review_data 
+  else{
+    
+    metrics_tcr<-metrics_post_tcd_auto[grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+    #print(metrics_tcr)
+    View(metrics_tcr)
+    tcr_list<-split(metrics_tcr,metrics_tcr$category)
+    tcr_summary<-lapply(tcr_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+    
+    tcr_summary<-as.data.frame(tcr_summary)
+    #print(tcr_summary)
+    row.names(tcr_summary) <- c("testcasereview.nv","testcasereview.ns","testcasereview.Time.Spent")
+    tcr_summary<-trygrep(tcr_summary)
+    tcr_summary<-convert.factors.to.strings.in.dataframe(tcr_summary)
+    #print("tcr_summary")
+    #print(tcr_summary)
+    metrics_post_tcr_tcd_auto<-metrics_post_tcd_auto[-grep( "test_case_review",metrics_post_tcd_auto$Summary,ignore.case = T),]
+  }
+  
+ 
+  #testcase_execution_summary
+  #all_data_imported except automation,tcdocumentation,tcreview and Other_Task =testcaseexecution 
+  metrics_tce <- metrics_post_tcr_tcd_auto
+  View(metrics_tce)
+  #print("metrics_tce")
+  #print(metrics_tce)
+  tce_list<-split(metrics_tce,metrics_tce$category)
+  #print(tce_list)
+  tce_summary<-lapply(tce_list,function(x) colSums(x[,c("nv","ns","Time.Spent")]))
+  tce_summary<-as.data.frame(tce_summary)
+  #print("tce_sumary()()()((")
+  row.names(tce_summary) <- c("testcaseexecution.nv","testcaseexecution.ns","testcaseexecution.Time.Spent")
+  tce_summary<-trygrep(tce_summary)
+  tce_summary<-convert.factors.to.strings.in.dataframe(tce_summary)
+ ##print(tce_summary)
+  ##print(tcr_summary)
+  ##print(automation_summary)
+  ##print(tcd_summary)
+  ##putting together all the data together except other_task_summary
+ metrics_final_summary<-rbind(automation_summary,tcd_summary,tcr_summary,tce_summary)
+#class.data  <- sapply(metrics_final_summary, class)
+##print("before")
+##print(class.data)
+metrics_final_summary<-convert.characters.to.numeric(metrics_final_summary)
+#class.data1<-sapply(metrics_final_summary,class)
+##print("after")
+##print(class.data1)
+
+##introducing row sum column
+total<-rowSums(metrics_final_summary)
+total<-as.data.frame(total)
+
+##print("total")
+##print(total)
+##integrating_metrics_final(without_othertask and row sum) 
+metrics_final_summary<-cbind(metrics_final_summary,total)
+##integrating metrics_final with Other_Task
+metrics_final_summary<-rbind(metrics_final_summary,Other_Task_summary)
+  #print(metrics_final_summary)
+  View(metrics_final_summary)
+##exporting The tables created
+ ##write.csv(metrics_final_summary, "metrics_final_summary.csv")
+
+wrap.it <- function(x, len)
+{ 
+  sapply(x, function(y) paste(strwrap(y, len), 
+                              collapse = "\n"), 
+         USE.NAMES = FALSE)
+}
+wrap.labels <- function(x, len)
+{
+  if (is.list(x))
+  {
+    lapply(x, wrap.it, len)
+  } else {
+    wrap.it(x, len)
+  }}
+View(agilemetrics)
+#print(colnames(agilemetrics))
+agilemetrics1<-agilemetrics[-grep("total",agilemetrics$Testers,ignore.case = T),][,c("Testers","total_valid_issues")]
+
+agilemetrics1<-agilemetrics1[agilemetrics1$total_valid_issues > 0,]
+
+good<-complete.cases(agilemetrics1)
+agilemetrics1<-agilemetrics1[good,]
+View(agilemetrics1)
+issues<-agilemetrics1[,c("total_valid_issues")]
+percentlabels<-round(issues/sum(issues)*100,1)
+percentlabels<-paste0(percentlabels,"%")
+lbls<-agilemetrics1[,c("Testers")]
+lbls<-gsub("\\.", "\n", lbls, ignore.case = FALSE, perl = FALSE,
+           fixed = FALSE, useBytes = FALSE)
+
+View(lbls)
+pie(issues,labels = percentlabels,col=rainbow(length(lbls)), main="Pie Chart of Issues",cex=0.7,,radius = 0.5)
+legend("bottomleft", lbls, cex=0.7, fill=rainbow(length(lbls)))
+
+##Time spent graph
+toMatch<-c("Time.Spent","Productive","Scrum")
+matches <- metrics_final_summary[ grep(paste(toMatch,collapse="|"), rownames(metrics_final_summary), value=TRUE),]
+matches<-cbind(rownames(matches),matches)
+rownames(matches)<-NULL
+matches<-matches[,c("rownames(matches)","total")]
+View(matches)
+colnames(matches)<-c("label","total")
+View(matches)
+matches<-matches[matches$total > 0,]
+
+percentlabels<-matches[,c("total")]
+
+percentlabels1<-round(percentlabels/sum(percentlabels)*100,1)
+lbls1 <-matches[,c("label")]
+lbls1<-gsub("\\.", "\n", lbls1, ignore.case = FALSE, perl = FALSE,
+            fixed = FALSE, useBytes = FALSE)
+lbls1<-gsub("Time.Spent","",lbls1,ignore.case=T)
+View(lbls1)
+
+
+
+
+pie(percentlabels,labels = percentlabels1,col=rainbow(length(percentlabels1)), main="Pie Chart of hours spent",cex = 0.5,radius=0.5)
+legend("bottomleft", lbls1, cex=0.7, fill=rainbow(length(lbls1)))
+
+  }
+
+metrics(metrics_main_icc="Metrics_Final_query.csv",inprogress_icc="FVT_inprogress_task.csv",user_list_icc="USER_LIST_QUERY.csv",issues_summary_icc="issues_query.csv",metrics_main_epipe="ePipe - Monthly metrics - Team.csv",user_list_epipe="ePipeline_User_List.csv",issues_summary_epipe="issues_query_epipe.csv")
+
+```
+
